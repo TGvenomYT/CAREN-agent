@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background: #030712;
+    @apply text-slate-100;
+    background-image:
+      radial-gradient(ellipse at 15% 25%, rgba(56, 189, 248, 0.15) 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 75%, rgba(168, 85, 247, 0.15) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 60%);
+    min-height: 100vh;
+  }
+}
+
+/* ── Glass Panel ── */
+.glass-panel {
+  background: rgba(10, 15, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 32px rgba(0,0,0,0.35);
+}
+
+/* ── Backdrop blur (only for modal overlay) ── */
+.glass-blur {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* ── Glossy card / button ── */
+.glossy-button {
+  background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.glossy-button:hover {
+  background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border-color: rgba(56, 189, 248, 0.18);
+  box-shadow: 0 4px 20px rgba(56,189,248,0.07), 0 2px 10px rgba(0,0,0,0.25);
+  transform: translateY(-1px);
+}
+
+/* ── Gradient text ── */
+.gradient-text {
+  background: linear-gradient(135deg, #67e8f9 0%, #818cf8 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Logo glow pulse ── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(34,211,238,0.35), 0 0 36px rgba(99,102,241,0.12); }
+  50%      { box-shadow: 0 0 26px rgba(34,211,238,0.55), 0 0 50px rgba(99,102,241,0.22); }
+}
+.logo-glow { animation: glow-pulse 3s ease-in-out infinite; }
+
+/* ── Neon input focus ── */
+.neon-input { transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; }
+.neon-input:focus {
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.07), 0 0 16px rgba(34, 211, 238, 0.05);
+  background: rgba(34, 211, 238, 0.03);
+}
+
+/* ── Shimmer loading skeleton ── */
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.animate-shimmer { position: relative; overflow: hidden; }
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(56,189,248,0.07), transparent);
+  animation: shimmer 1.8s infinite linear;
+}
+
+/* ── Float-up entrance ── */
+@keyframes float-up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+.animate-float-up { animation: float-up 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* ── Toast slide-in ── */
+@keyframes toast-in  { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
+@keyframes toast-out { from { opacity:1; transform:translateX(0); }   to { opacity:0; transform:translateX(100%); } }
+.toast-enter { animation: toast-in  0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+.toast-exit  { animation: toast-out 0.25s ease-in forwards; }
+
+/* ── Modal zoom ── */
+@keyframes modal-zoom { from { opacity:0; transform:scale(0.94) translateY(16px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.animate-modal { animation: modal-zoom 0.35s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 20px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(56,189,248,0.35); }
+
+/* ── Range slider accent ── */
+input[type="range"] { accent-color: #22d3ee; }

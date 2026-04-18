@@ -1,6 +1,7 @@
 # Web Server & Real-time Voice
 fastapi
 uvicorn
+aiofiles
 fastrtc[vad, stt, tts]
 fastrtc-moonshine-onnx
 kokoro-onnx

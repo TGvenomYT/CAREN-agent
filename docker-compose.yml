@@ -1,0 +1,25 @@
+services:
+  caren-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=llama2
+      # Add your email credentials here or use a .env file
+      # - SENDER_EMAIL=${SENDER_EMAIL}
+      # - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      # - SMTP_SERVER=${SMTP_SERVER}
+      # - SMTP_PORT=${SMTP_PORT}
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
