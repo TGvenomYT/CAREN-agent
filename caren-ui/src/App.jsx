@@ -132,7 +132,8 @@ function LoginScreen({ onLogin }) {
       const res = await axios.post(`${BACKEND}/api/auth/login`, { password })
       onLogin(res.data.token)
     } catch (err) {
-      setError(err.response?.status === 401 ? 'Wrong password.' : 'Login failed.')
+      console.error('[login error]', err?.response?.status, err?.message, err?.response?.data)
+      setError(err.response?.status === 401 ? 'Wrong password.' : `Login failed: ${err?.response?.data?.detail || err?.message}`)
     } finally {
       setLoading(false)
     }
@@ -269,8 +270,9 @@ function App() {
     try {
       const res = await axios.post(`${API}/generate-body`, { subject: emailForm.subject })
       setEmailForm(f => ({ ...f, body: res.data.body }))
-    } catch {
-      addToast('AI generation failed.', 'error')
+    } catch (err) {
+      console.error('[generate-body error]', err?.response?.status, err?.message, err?.response?.data)
+      addToast(err?.response?.data?.detail || 'AI generation failed.', 'error')
     } finally {
       setGenerating(false)
     }
@@ -289,8 +291,9 @@ function App() {
       await axios.post(`${API}/send`, fd)
       addToast('Email sent successfully!', 'success')
       closeCompose()
-    } catch {
-      addToast('Failed to send email.', 'error')
+    } catch (err) {
+      console.error('[send error]', err?.response?.status, err?.message, err?.response?.data)
+      addToast(err?.response?.data?.detail || 'Failed to send email.', 'error')
     } finally {
       setLoading(false)
     }

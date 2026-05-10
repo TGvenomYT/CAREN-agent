@@ -1,6 +1,7 @@
 import os
 import asyncio
 import hmac
+import traceback
 from datetime import datetime, timedelta, timezone
 from functools import partial, lru_cache
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request, Response
@@ -20,14 +21,21 @@ from jose import jwt, JWTError
 import ollama
 import mailing_agent
 import gradio as gr
+import sys
 
 load_dotenv()
 
+# Force unbuffered stdout so prints appear immediately in HF logs
+sys.stdout.reconfigure(line_buffering=True)
+
 # Debug: show which secrets are present at startup
-_check_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET"]
+_check_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "SMTP_SERVER", "SMTP_PORT", "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET", "FRONTEND_ORIGIN", "HF_TOKEN"]
 for _v in _check_vars:
     _val = os.getenv(_v)
-    print(f"[ENV] {_v} = {'SET' if _val else 'MISSING'}")
+    if _v in ("FRONTEND_ORIGIN", "OLLAMA_HOST", "OLLAMA_MODEL", "SMTP_SERVER", "SMTP_PORT", "IMAP_SERVER"):
+        print(f"[ENV] {_v} = {_val or 'MISSING'}")
+    else:
+        print(f"[ENV] {_v} = {'SET (%d chars)' % len(_val) if _val else 'MISSING'}")
 
 
 # ==========================================
@@ -119,6 +127,7 @@ _origins = [
     for o in os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",")
     if o.strip()
 ]
+print(f"[CORS] Allowed origins: {_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
@@ -156,11 +165,14 @@ def health_check():
 # AUTH ENDPOINTS
 # ------------------------------------------
 @app.post("/api/auth/login")
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, response: Response, request: Request):
+    print(f"[auth/login] attempt from origin={request.headers.get('origin', 'N/A')}")
     if not APP_PASSWORD or not JWT_SECRET:
+        print(f"[auth/login] FAIL: APP_PASSWORD={'SET' if APP_PASSWORD else 'MISSING'}, JWT_SECRET={'SET' if JWT_SECRET else 'MISSING'}")
         raise HTTPException(status_code=500, detail="Server auth not configured")
     # Constant-time compare to avoid trivial timing leaks.
     if not hmac.compare_digest(req.password.encode(), APP_PASSWORD.encode()):
+        print("[auth/login] FAIL: wrong password")
         raise HTTPException(status_code=401, detail="Invalid password")
     token = _create_token()
     # Cookie covers the /voice iframe (same-origin to backend); the JSON
@@ -170,6 +182,7 @@ async def login(req: LoginRequest, response: Response):
         max_age=JWT_TTL_HOURS * 3600,
         httponly=True, secure=True, samesite="none", path="/",
     )
+    print("[auth/login] SUCCESS")
     return {"token": token, "expires_in": JWT_TTL_HOURS * 3600}
 
 
@@ -189,30 +202,54 @@ async def auth_check(_: None = Depends(require_auth)):
 # ------------------------------------------
 @app.get("/api/mail/summarize")
 async def summarize_emails(limit: int = 10, _: None = Depends(require_auth)):
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, partial(mailing_agent.summarize_inbox, limit=limit))
-    if result.get("status") == "error":
-        print(f"[summarize] ERROR: {result['message']}")
-        raise HTTPException(status_code=500, detail=result["message"])
-    return result
+    print(f"[summarize] START limit={limit}")
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, partial(mailing_agent.summarize_inbox, limit=limit))
+        if result.get("status") == "error":
+            print(f"[summarize] ERROR: {result['message']}")
+            raise HTTPException(status_code=500, detail=result["message"])
+        print(f"[summarize] SUCCESS: {len(result.get('data', []))} items")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[summarize] UNHANDLED: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/mail/classify")
 async def get_classification(limit: int = 10, _: None = Depends(require_auth)):
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, partial(mailing_agent.classify_inbox, limit=limit))
-    if result.get("status") == "error":
-        print(f"[classify] ERROR: {result['message']}")
-        raise HTTPException(status_code=500, detail=result["message"])
-    return result
+    print(f"[classify] START limit={limit}")
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, partial(mailing_agent.classify_inbox, limit=limit))
+        if result.get("status") == "error":
+            print(f"[classify] ERROR: {result['message']}")
+            raise HTTPException(status_code=500, detail=result["message"])
+        print(f"[classify] SUCCESS: {len(result.get('data', []))} items")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[classify] UNHANDLED: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/mail/generate-body")
 async def post_generate_body(req: SubjectRequest, _: None = Depends(require_auth)):
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, partial(mailing_agent.generate_body, req.subject))
-    if result.get("status") == "error":
-        print(f"[generate-body] ERROR: {result['message']}")
-        raise HTTPException(status_code=500, detail=result["message"])
-    return result
+    print(f"[generate-body] START subject='{req.subject[:50]}'")
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, partial(mailing_agent.generate_body, req.subject))
+        if result.get("status") == "error":
+            print(f"[generate-body] ERROR: {result['message']}")
+            raise HTTPException(status_code=500, detail=result["message"])
+        print("[generate-body] SUCCESS")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[generate-body] UNHANDLED: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/mail/send")
 async def post_send_email(
@@ -246,6 +283,7 @@ async def post_send_email(
     if result["status"] == "error":
         print(f"[send] ERROR: {result['message']}")
         raise HTTPException(status_code=500, detail=result["message"])
+    print("[send] SUCCESS")
     return result
 
 # ==========================================
