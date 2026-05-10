@@ -186,6 +186,7 @@ async def summarize_emails(limit: int = 10, _: None = Depends(require_auth)):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.summarize_inbox, limit=limit))
     if result.get("status") == "error":
+        print(f"[summarize] ERROR: {result['message']}")
         raise HTTPException(status_code=500, detail=result["message"])
     return result
 
@@ -194,6 +195,7 @@ async def get_classification(limit: int = 10, _: None = Depends(require_auth)):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.classify_inbox, limit=limit))
     if result.get("status") == "error":
+        print(f"[classify] ERROR: {result['message']}")
         raise HTTPException(status_code=500, detail=result["message"])
     return result
 
