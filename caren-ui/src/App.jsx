@@ -1,10 +1,31 @@
-import React, { useState, useRef, useCallback, memo } from 'react'
+import React, { useState, useRef, useCallback, useEffect, memo } from 'react'
 import axios from 'axios'
 import {
   ShieldCheck, Send, Sparkles, X, Zap, Layers,
   Paperclip, FileText, CheckCircle2, AlertCircle, Mic, ChevronRight,
-  MailCheck, BarChart3, Trash2
+  MailCheck, BarChart3, Trash2, Sun, Moon
 } from 'lucide-react'
+
+// ================================================================
+// THEME HOOK — persists "light" | "dark" to localStorage and
+// reflects it on <html data-theme="…"> for CSS to react to.
+// ================================================================
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark'
+    const stored = window.localStorage.getItem('caren-theme')
+    if (stored === 'light' || stored === 'dark') return stored
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('caren-theme', theme)
+  }, [theme])
+
+  const toggle = useCallback(() => setTheme(t => (t === 'dark' ? 'light' : 'dark')), [])
+  return { theme, toggle }
+}
 
 // ================================================================
 // TOAST SYSTEM
@@ -78,6 +99,7 @@ function App() {
 
   const fileInputRef = useRef(null)
   const { toasts, add: addToast, remove: removeToast } = useToast()
+  const { theme, toggle: toggleTheme } = useTheme()
 
   const API = '/api/mail'
 
@@ -140,7 +162,7 @@ function App() {
   // RENDER
   // ════════════════════════════════════════════════════════════════
   return (
-    <div className="flex h-screen w-full p-5 gap-5 font-sans bg-[#030712]">
+    <div className="flex h-screen w-full p-5 gap-5 font-sans">
       <Toast toasts={toasts} remove={removeToast} />
 
       {/* ═══════════ SIDEBAR ═══════════ */}
@@ -172,10 +194,25 @@ function App() {
           <input type="range" min="5" max="50" step="5" value={fetchLimit} onChange={e => setFetchLimit(e.target.value)} className="w-full h-1 rounded-full cursor-pointer" />
         </div>
 
+        {/* Theme toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-pressed={theme === 'light'}
+          className="theme-toggle mt-4"
+        >
+          <span className="icon-swap">
+            <Sun size={16} className="icon-sun" />
+            <Moon size={16} className="icon-moon" />
+          </span>
+          <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+        </button>
+
         {/* Compose button */}
         <button
           onClick={() => setIsComposing(true)}
-          className="mt-5 py-4 rounded-[1.5rem] bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-600 text-white font-black text-[11px] uppercase tracking-[0.2em] shadow-[0_8px_32px_rgba(34,211,238,0.25)] hover:shadow-[0_8px_40px_rgba(34,211,238,0.45)] hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+          className="mt-3 py-4 rounded-[1.5rem] bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-600 text-white font-black text-[11px] uppercase tracking-[0.2em] shadow-[0_8px_32px_rgba(34,211,238,0.25)] hover:shadow-[0_8px_40px_rgba(34,211,238,0.45)] hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
           style={{ transition: 'transform 0.15s, box-shadow 0.2s' }}
         >
           <Send size={14} /> New Transmission
