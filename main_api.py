@@ -210,6 +210,7 @@ async def post_generate_body(req: SubjectRequest, _: None = Depends(require_auth
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.generate_body, req.subject))
     if result.get("status") == "error":
+        print(f"[generate-body] ERROR: {result['message']}")
         raise HTTPException(status_code=500, detail=result["message"])
     return result
 
@@ -243,6 +244,7 @@ async def post_send_email(
             os.remove(temp_path)
 
     if result["status"] == "error":
+        print(f"[send] ERROR: {result['message']}")
         raise HTTPException(status_code=500, detail=result["message"])
     return result
 
