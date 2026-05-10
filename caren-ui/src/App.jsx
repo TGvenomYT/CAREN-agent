@@ -254,8 +254,9 @@ function App() {
     try {
       const res = await axios.get(`${API}/${endpoint}?limit=${fetchLimit}`)
       setData(res.data.data || [])
-    } catch {
-      addToast('Failed to fetch data.', 'error')
+    } catch (err) {
+      console.error('[fetchData error]', err?.response?.status, err?.message, err?.response?.data)
+      addToast(err?.response?.data?.detail || 'Failed to fetch data.', 'error')
     } finally {
       setLoading(false)
     }
