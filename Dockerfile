@@ -32,8 +32,9 @@ COPY . .
 # Copy the built frontend from Stage 1 into the expected directory
 COPY --from=frontend-builder /app/caren-ui/dist ./caren-ui/dist
 
-# Expose port 8000 for FastAPI
-EXPOSE 8000
+# HuggingFace Spaces requires port 7860; override PORT for local use (e.g. PORT=8000)
+ENV PORT=7860
+EXPOSE 7860
 
 # Environment variables (Defaults - can be overridden at runtime)
 # IMPORTANT: OLLAMA_MODEL should match what you have in your local Ollama instance

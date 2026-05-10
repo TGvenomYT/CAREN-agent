@@ -1,6 +1,6 @@
 import os
 import asyncio
-from functools import partial
+from functools import partial, lru_cache
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,10 +13,20 @@ import uvicorn
 from dotenv import load_dotenv
 import re
 from fastapi.middleware.cors import CORSMiddleware
+import ollama
 import mailing_agent
 import gradio as gr
 
 load_dotenv()
+
+
+@lru_cache(maxsize=1)
+def _ollama_client() -> ollama.Client:
+    """Single Ollama client. Talks to local daemon or Ollama Cloud based on env."""
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    api_key = os.getenv("OLLAMA_API_KEY")
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+    return ollama.Client(host=host, headers=headers)
 
 
 def clean_text(text: str) -> str:
@@ -134,9 +144,8 @@ def caren_voice_handler(audio_input):
 
     print(f"User said: {transcript}")
 
-    import ollama
     try:
-        response = ollama.generate(
+        response = _ollama_client().generate(
             model=os.getenv("OLLAMA_MODEL", "llama2"),
             prompt=f"You are Caren, a helpful AI assistant. Be concise. User: {transcript}"
         )
@@ -176,5 +185,6 @@ else:
     print("Warning: caren-ui/dist not found. Serving API only.")
 
 if __name__ == "__main__":
-    print("Starting server... check http://0.0.0.0:8000 for the UI")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 7860))
+    print(f"Starting server... check http://0.0.0.0:{port} for the UI")
+    uvicorn.run(app, host="0.0.0.0", port=port)

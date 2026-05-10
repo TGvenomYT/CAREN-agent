@@ -1,3 +1,13 @@
+---
+title: CAREN Agent
+emoji: ⚡
+colorFrom: cyan
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # CAREN AI: Neural Mailing Agent & Voice Interface
 
 CAREN (Cybernetic Adaptive Remote Email Network) is a high-performance, glossy-themed AI dashboard designed for advanced email management, automated classification, and real-time voice interaction. It combines a React-based "Glassmorphism" frontend with a robust FastAPI/Python backend utilizing Ollama for local LLM processing.
@@ -77,6 +87,7 @@ OLLAMA_MODEL=llama2
 ---
 
 ### 3. Run the Backend
+
 
 ```bash
 python main_api.py

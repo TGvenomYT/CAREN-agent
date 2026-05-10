@@ -11,6 +11,7 @@ import tailwindcss from '@tailwindcss/vite'
 const BACKEND = 'http://localhost:8000'
 
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [
     react(),
     tailwindcss(),

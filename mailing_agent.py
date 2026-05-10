@@ -13,11 +13,28 @@ import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_core.prompts import PromptTemplate  
-from langchain_community.llms import Ollama 
+from langchain_core.prompts import PromptTemplate
+from langchain_ollama import OllamaLLM
 
 # Load environment variables
 load_dotenv()
+
+
+def _ollama_llm(temperature: float = 0.0) -> OllamaLLM:
+    """
+    Build an Ollama LLM that talks to either a local daemon or Ollama Cloud.
+    When OLLAMA_API_KEY is set, the auth header is injected and OLLAMA_HOST
+    should point at https://ollama.com (with a *-cloud model name).
+    """
+    base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    api_key = os.getenv("OLLAMA_API_KEY")
+    client_kwargs = {"headers": {"Authorization": f"Bearer {api_key}"}} if api_key else {}
+    return OllamaLLM(
+        model=os.getenv("OLLAMA_MODEL", "llama2"),
+        base_url=base_url,
+        temperature=temperature,
+        client_kwargs=client_kwargs,
+    )
 
 # ==========================================
 # HELPER FUNCTIONS
@@ -204,8 +221,7 @@ def generate_body(subject: str) -> dict:
     )
     
     try:
-        # Use Ollama locally (requires Ollama to be running)
-        llm = Ollama(model=os.getenv("OLLAMA_MODEL", "llama2"), temperature=0.7)
+        llm = _ollama_llm(temperature=0.7)
         chain = prompt_template | llm
         body = chain.invoke({'subject': subject})
         
@@ -228,8 +244,8 @@ def summarize_inbox(limit: int = 10) -> dict:
 
     summaries = []
     try:
-        # Create ONE Ollama instance (not per-email)
-        llm = Ollama(model=os.getenv("OLLAMA_MODEL", "llama2"))
+        # Create ONE LLM instance (not per-email)
+        llm = _ollama_llm()
         splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
         prompt = PromptTemplate(
             input_variables=["email_content"],

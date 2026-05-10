@@ -78,7 +78,7 @@ const VoiceBridge = memo(({ active }) => (
     }}
   >
     <div className="h-full w-full rounded-[2.5rem] glass-panel overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
-      <iframe src="/voice/" className="w-full h-full border-none" allow="microphone" />
+      <iframe src={`${import.meta.env.VITE_BACKEND_URL || ''}/voice/`} className="w-full h-full border-none" allow="microphone" />
     </div>
   </div>
 ))
@@ -101,7 +101,8 @@ function App() {
   const { toasts, add: addToast, remove: removeToast } = useToast()
   const { theme, toggle: toggleTheme } = useTheme()
 
-  const API = '/api/mail'
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
+  const API = `${BACKEND}/api/mail`
 
   // ── Fetch data (summaries or spam) ──
   const handleFetchData = async (endpoint, tab) => {
