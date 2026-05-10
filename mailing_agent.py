@@ -284,6 +284,7 @@ def summarize_inbox(limit: int = 10) -> dict:
 
         return {"status": "success", "data": summaries}
     except Exception as e:
+        print(f"[summarize_inbox ERROR] {type(e).__name__}: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -330,4 +331,5 @@ def classify_inbox(limit: int = 10) -> dict:
 
         return {"status": "success", "data": list(reversed(results))}
     except Exception as e:
+        print(f"[classify_inbox ERROR] {type(e).__name__}: {e}")
         return {"status": "error", "message": str(e)}
