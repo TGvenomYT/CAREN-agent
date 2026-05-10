@@ -23,6 +23,12 @@ import gradio as gr
 
 load_dotenv()
 
+# Debug: show which secrets are present at startup
+_check_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET"]
+for _v in _check_vars:
+    _val = os.getenv(_v)
+    print(f"[ENV] {_v} = {'SET' if _val else 'MISSING'}")
+
 
 # ==========================================
 # AUTH CONFIG
