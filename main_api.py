@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Req
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from fastrtc import Stream, ReplyOnPause, get_stt_model, get_tts_model, get_cloudflare_turn_credentials
+from fastrtc import Stream, ReplyOnPause, get_stt_model, get_tts_model, get_hf_turn_credentials
 from typing import List, Optional
 import tempfile
 import shutil
@@ -282,7 +282,7 @@ def caren_voice_handler(audio_input):
         yield audio_chunk
 
 _hf_token = os.getenv("HF_TOKEN")
-_rtc_config = get_cloudflare_turn_credentials(token=_hf_token) if _hf_token else None
+_rtc_config = get_hf_turn_credentials(token=_hf_token) if _hf_token else None
 
 stream = Stream(
     handler=ReplyOnPause(caren_voice_handler),
