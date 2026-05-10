@@ -28,8 +28,19 @@ load_dotenv()
 # Force unbuffered stdout so prints appear immediately in HF logs
 sys.stdout.reconfigure(line_buffering=True)
 
+# Strip trailing whitespace/newlines from all known env vars (HF secrets
+# sometimes include invisible trailing characters).
+_strip_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "SMTP_SERVER", "SMTP_PORT",
+               "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET",
+               "FRONTEND_ORIGIN", "HF_TOKEN"]
+for _v in _strip_vars:
+    _raw = os.getenv(_v)
+    if _raw and _raw != _raw.strip():
+        os.environ[_v] = _raw.strip()
+        print(f"[ENV] {_v}: stripped whitespace ({len(_raw)} -> {len(_raw.strip())} chars)")
+
 # Debug: show which secrets are present at startup
-_check_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "SMTP_SERVER", "SMTP_PORT", "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET", "FRONTEND_ORIGIN", "HF_TOKEN"]
+_check_vars = _strip_vars
 for _v in _check_vars:
     _val = os.getenv(_v)
     if _v in ("FRONTEND_ORIGIN", "OLLAMA_HOST", "OLLAMA_MODEL", "SMTP_SERVER", "SMTP_PORT", "IMAP_SERVER"):
