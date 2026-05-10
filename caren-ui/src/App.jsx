@@ -3,8 +3,34 @@ import axios from 'axios'
 import {
   ShieldCheck, Send, Sparkles, X, Zap, Layers,
   Paperclip, FileText, CheckCircle2, AlertCircle, Mic, ChevronRight,
-  MailCheck, BarChart3, Trash2, Sun, Moon
+  MailCheck, BarChart3, Trash2, Sun, Moon, Lock, LogOut
 } from 'lucide-react'
+
+// ================================================================
+// AUTH — JWT in localStorage + cookie set by backend on login.
+// All cross-origin calls send withCredentials so the cookie reaches
+// the /voice iframe; the JWT is also sent as a Bearer header for /api.
+// ================================================================
+const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
+const TOKEN_KEY = 'caren-token'
+
+axios.defaults.withCredentials = true
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY)
+}
+function setToken(t) {
+  if (t) {
+    localStorage.setItem(TOKEN_KEY, t)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
+  } else {
+    localStorage.removeItem(TOKEN_KEY)
+    delete axios.defaults.headers.common['Authorization']
+  }
+}
+// Re-attach header on hard reload.
+const _initialToken = getToken()
+if (_initialToken) axios.defaults.headers.common['Authorization'] = `Bearer ${_initialToken}`
 
 // ================================================================
 // THEME HOOK — persists "light" | "dark" to localStorage and
@@ -67,21 +93,97 @@ function useToast() {
 // ================================================================
 // VOICE IFRAME (memo'd so it doesn't remount on tab switch)
 // ================================================================
-const VoiceBridge = memo(({ active }) => (
-  <div
-    className="absolute inset-0 top-[96px] p-8 z-10"
-    style={{
-      visibility: active ? 'visible' : 'hidden',
-      opacity: active ? 1 : 0,
-      pointerEvents: active ? 'auto' : 'none',
-      transition: 'opacity 0.4s, visibility 0.4s',
-    }}
-  >
-    <div className="h-full w-full rounded-[2.5rem] glass-panel overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
-      <iframe src={`${import.meta.env.VITE_BACKEND_URL || ''}/voice/`} className="w-full h-full border-none" allow="microphone" />
+const VoiceBridge = memo(({ active, token }) => {
+  // Token is in the URL because iframes can't set Authorization headers.
+  // The cookie set on login also works when same-origin to backend.
+  const src = token
+    ? `${BACKEND}/voice/?t=${encodeURIComponent(token)}`
+    : `${BACKEND}/voice/`
+  return (
+    <div
+      className="absolute inset-0 top-[96px] p-8 z-10"
+      style={{
+        visibility: active ? 'visible' : 'hidden',
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? 'auto' : 'none',
+        transition: 'opacity 0.4s, visibility 0.4s',
+      }}
+    >
+      <div className="h-full w-full rounded-[2.5rem] glass-panel overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
+        <iframe src={src} className="w-full h-full border-none" allow="microphone" />
+      </div>
     </div>
-  </div>
-))
+  )
+})
+
+// ================================================================
+// LOGIN SCREEN
+// ================================================================
+function LoginScreen({ onLogin }) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await axios.post(`${BACKEND}/api/auth/login`, { password })
+      onLogin(res.data.token)
+    } catch (err) {
+      setError(err.response?.status === 401 ? 'Wrong password.' : 'Login failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center p-6 font-sans">
+      <form
+        onSubmit={submit}
+        className="glass-panel rounded-[2.5rem] p-10 w-full max-w-md space-y-6 animate-modal"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-600 flex items-center justify-center logo-glow">
+            <Lock className="text-white" size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tighter gradient-text leading-none">CAREN</h1>
+            <p className="text-[9px] text-slate-600 uppercase tracking-[0.25em] font-bold mt-1">Authentication Required</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] ml-1 block">Access Key</label>
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            autoFocus
+            placeholder="••••••••"
+            className="w-full bg-white/[0.03] border border-white/[0.08] px-5 py-3.5 rounded-2xl outline-none text-white placeholder-slate-700 text-sm neon-input"
+          />
+          {error && (
+            <p className="text-rose-400 text-xs flex items-center gap-1.5 mt-2">
+              <AlertCircle size={12} /> {error}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !password}
+          className="w-full py-4 rounded-[1.5rem] bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-600 text-white font-black text-xs uppercase tracking-[0.25em] shadow-[0_4px_24px_rgba(34,211,238,0.3)] hover:shadow-[0_4px_40px_rgba(34,211,238,0.5)] hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          style={{ transition: 'transform 0.15s, box-shadow 0.2s' }}
+        >
+          {loading ? 'Authenticating…' : 'Unlock'}
+        </button>
+      </form>
+    </div>
+  )
+}
 
 // ================================================================
 // MAIN APP
@@ -97,12 +199,52 @@ function App() {
   const [attachmentFile, setAttachmentFile] = useState(null)
   const [generating, setGenerating] = useState(false)
 
+  // Auth state — null = unknown/loading, '' = logged out, string = JWT
+  const [token, setTokenState] = useState(getToken)
+
   const fileInputRef = useRef(null)
   const { toasts, add: addToast, remove: removeToast } = useToast()
   const { theme, toggle: toggleTheme } = useTheme()
 
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
   const API = `${BACKEND}/api/mail`
+
+  // ── Global 401 interceptor: any expired/invalid token → log out ──
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      r => r,
+      err => {
+        if (err.response?.status === 401) {
+          setToken(null)
+          setTokenState(null)
+        }
+        return Promise.reject(err)
+      }
+    )
+    return () => axios.interceptors.response.eject(id)
+  }, [])
+
+  // ── Verify token on mount; if backend rejects, log out ──
+  useEffect(() => {
+    if (!token) return
+    axios.get(`${BACKEND}/api/auth/check`).catch(() => {
+      setToken(null)
+      setTokenState(null)
+    })
+  }, [token])
+
+  const handleLogin = (jwt) => {
+    setToken(jwt)
+    setTokenState(jwt)
+  }
+
+  const handleLogout = async () => {
+    try { await axios.post(`${BACKEND}/api/auth/logout`) } catch { /* ignore */ }
+    setToken(null)
+    setTokenState(null)
+    setData([])
+  }
+
+  if (!token) return <LoginScreen onLogin={handleLogin} />
 
   // ── Fetch data (summaries or spam) ──
   const handleFetchData = async (endpoint, tab) => {
@@ -195,20 +337,32 @@ function App() {
           <input type="range" min="5" max="50" step="5" value={fetchLimit} onChange={e => setFetchLimit(e.target.value)} className="w-full h-1 rounded-full cursor-pointer" />
         </div>
 
-        {/* Theme toggle */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-pressed={theme === 'light'}
-          className="theme-toggle mt-4"
-        >
-          <span className="icon-swap">
-            <Sun size={16} className="icon-sun" />
-            <Moon size={16} className="icon-moon" />
-          </span>
-          <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-        </button>
+        {/* Theme toggle + logout */}
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={theme === 'light'}
+            className="theme-toggle flex-1"
+          >
+            <span className="icon-swap">
+              <Sun size={16} className="icon-sun" />
+              <Moon size={16} className="icon-moon" />
+            </span>
+            <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="theme-toggle"
+            style={{ width: 'auto', padding: '0.65rem 0.9rem' }}
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
 
         {/* Compose button */}
         <button
@@ -243,7 +397,7 @@ function App() {
         </header>
 
         {/* Voice iframe (always mounted, toggled via visibility) */}
-        <VoiceBridge active={activeTab === 'chat'} />
+        <VoiceBridge active={activeTab === 'chat'} token={token} />
 
         {/* Data content pane */}
         <div

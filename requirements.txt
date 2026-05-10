@@ -24,3 +24,6 @@ scikit-learn
 # Utilities
 numpy
 python-multipart
+
+# Auth
+python-jose[cryptography]

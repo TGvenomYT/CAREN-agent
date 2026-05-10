@@ -1,8 +1,10 @@
 import os
 import asyncio
+import hmac
+from datetime import datetime, timedelta, timezone
 from functools import partial, lru_cache
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request, Response
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastrtc import Stream, ReplyOnPause, get_stt_model, get_tts_model
@@ -13,11 +15,72 @@ import uvicorn
 from dotenv import load_dotenv
 import re
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from jose import jwt, JWTError
 import ollama
 import mailing_agent
 import gradio as gr
 
 load_dotenv()
+
+
+# ==========================================
+# AUTH CONFIG
+# ==========================================
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_ALGO = "HS256"
+JWT_TTL_HOURS = 24 * 7  # 7-day session
+SESSION_COOKIE = "caren_session"
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+
+if not JWT_SECRET:
+    print("WARNING: JWT_SECRET is empty. Set it in your environment for production.")
+if not APP_PASSWORD:
+    print("WARNING: APP_PASSWORD is empty. The login endpoint will reject all requests.")
+
+
+def _create_token() -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_HOURS)
+    return jwt.encode({"sub": "owner", "exp": expire}, JWT_SECRET, algorithm=JWT_ALGO)
+
+
+def _verify_token(token: str) -> bool:
+    if not token or not JWT_SECRET:
+        return False
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        return True
+    except JWTError:
+        return False
+
+
+def _extract_token(request: Request) -> Optional[str]:
+    auth = request.headers.get("Authorization")
+    if auth and auth.startswith("Bearer "):
+        return auth[7:]
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if cookie:
+        return cookie
+    # Fallback for the voice iframe / static assets that can't set headers.
+    return request.query_params.get("t")
+
+
+def require_auth(request: Request):
+    """FastAPI dependency: 401s any request without a valid JWT."""
+    if not _verify_token(_extract_token(request)):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+class VoiceAuthMiddleware(BaseHTTPMiddleware):
+    """Gates the Gradio /voice mount (which is not a normal route, so a
+    Depends() can't be attached). Verifies the same JWT via header,
+    cookie, or ?t= query param."""
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/voice"):
+            if not _verify_token(_extract_token(request)):
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
 
 
 @lru_cache(maxsize=1)
@@ -44,13 +107,22 @@ def clean_text(text: str) -> str:
 app = FastAPI(title="Caren AI Web Backend")
 
 # --- CORS Configuration ---
+# Comma-separated list of allowed origins (no trailing slashes).
+_origins = [
+    o.strip()
+    for o in os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Voice mount needs middleware-level auth (it's a sub-app, not a route).
+app.add_middleware(VoiceAuthMiddleware)
 
 # --- Models for API Requests ---
 class EmailRequest(BaseModel):
@@ -62,6 +134,9 @@ class EmailRequest(BaseModel):
 class SubjectRequest(BaseModel):
     subject: str
 
+class LoginRequest(BaseModel):
+    password: str
+
 # ==========================================
 # API ENDPOINTS
 # ==========================================
@@ -70,8 +145,44 @@ class SubjectRequest(BaseModel):
 def health_check():
     return {"status": "online", "message": "FastAPI is running!"}
 
+
+# ------------------------------------------
+# AUTH ENDPOINTS
+# ------------------------------------------
+@app.post("/api/auth/login")
+async def login(req: LoginRequest, response: Response):
+    if not APP_PASSWORD or not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="Server auth not configured")
+    # Constant-time compare to avoid trivial timing leaks.
+    if not hmac.compare_digest(req.password.encode(), APP_PASSWORD.encode()):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    token = _create_token()
+    # Cookie covers the /voice iframe (same-origin to backend); the JSON
+    # token covers cross-origin /api calls from GitHub Pages.
+    response.set_cookie(
+        SESSION_COOKIE, token,
+        max_age=JWT_TTL_HOURS * 3600,
+        httponly=True, secure=True, samesite="none", path="/",
+    )
+    return {"token": token, "expires_in": JWT_TTL_HOURS * 3600}
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/", samesite="none", secure=True)
+    return {"status": "ok"}
+
+
+@app.get("/api/auth/check")
+async def auth_check(_: None = Depends(require_auth)):
+    return {"authenticated": True}
+
+
+# ------------------------------------------
+# MAIL ENDPOINTS (all gated by require_auth)
+# ------------------------------------------
 @app.get("/api/mail/summarize")
-async def summarize_emails(limit: int = 10):
+async def summarize_emails(limit: int = 10, _: None = Depends(require_auth)):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.summarize_inbox, limit=limit))
     if result.get("status") == "error":
@@ -79,7 +190,7 @@ async def summarize_emails(limit: int = 10):
     return result
 
 @app.get("/api/mail/classify")
-async def get_classification(limit: int = 10):
+async def get_classification(limit: int = 10, _: None = Depends(require_auth)):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.classify_inbox, limit=limit))
     if result.get("status") == "error":
@@ -87,7 +198,7 @@ async def get_classification(limit: int = 10):
     return result
 
 @app.post("/api/mail/generate-body")
-async def post_generate_body(req: SubjectRequest):
+async def post_generate_body(req: SubjectRequest, _: None = Depends(require_auth)):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(mailing_agent.generate_body, req.subject))
     if result.get("status") == "error":
@@ -99,7 +210,8 @@ async def post_send_email(
     to: str = Form(...),
     subject: str = Form(...),
     body: str = Form(...),
-    attachment: Optional[UploadFile] = File(None)
+    attachment: Optional[UploadFile] = File(None),
+    _: None = Depends(require_auth),
 ):
     sender = os.getenv("SENDER_EMAIL")
     password = os.getenv("EMAIL_PASSWORD")
