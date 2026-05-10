@@ -3,9 +3,7 @@ fastapi
 uvicorn
 aiofiles
 gradio
-fastrtc[vad, stt, tts]
-fastrtc-moonshine-onnx
-kokoro-onnx
+fastrtc[vad,stt,tts]
 
 # AI & LLM Logic
 ollama
