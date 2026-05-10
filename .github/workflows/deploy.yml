@@ -79,5 +79,5 @@ jobs:
         run: |
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
-          git remote add hf https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/CAREN-agent
+          git remote add hf https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/CAREN-agent
           git push hf HEAD:main --force
