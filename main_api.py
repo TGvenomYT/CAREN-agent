@@ -30,9 +30,9 @@ sys.stdout.reconfigure(line_buffering=True)
 
 # Strip trailing whitespace/newlines from all known env vars (HF secrets
 # sometimes include invisible trailing characters).
-_strip_vars = ["SENDER_EMAIL", "EMAIL_PASSWORD", "IMAP_SERVER", "SMTP_SERVER", "SMTP_PORT",
-               "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL", "APP_PASSWORD", "JWT_SECRET",
-               "FRONTEND_ORIGIN", "HF_TOKEN"]
+_strip_vars = ["SENDER_EMAIL", "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN",
+               "SMTP_SERVER", "SMTP_PORT", "OLLAMA_API_KEY", "OLLAMA_HOST", "OLLAMA_MODEL",
+               "APP_PASSWORD", "JWT_SECRET", "FRONTEND_ORIGIN", "HF_TOKEN"]
 for _v in _strip_vars:
     _raw = os.getenv(_v)
     if _raw and _raw != _raw.strip():
@@ -43,7 +43,7 @@ for _v in _strip_vars:
 _check_vars = _strip_vars
 for _v in _check_vars:
     _val = os.getenv(_v)
-    if _v in ("FRONTEND_ORIGIN", "OLLAMA_HOST", "OLLAMA_MODEL", "SMTP_SERVER", "SMTP_PORT", "IMAP_SERVER"):
+    if _v in ("FRONTEND_ORIGIN", "OLLAMA_HOST", "OLLAMA_MODEL", "SMTP_SERVER", "SMTP_PORT"):
         print(f"[ENV] {_v} = {_val or 'MISSING'}")
     else:
         print(f"[ENV] {_v} = {'SET (%d chars)' % len(_val) if _val else 'MISSING'}")

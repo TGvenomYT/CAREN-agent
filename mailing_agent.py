@@ -1,7 +1,5 @@
-import smtplib
-import ssl
 import os
-import socket
+import base64
 import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,26 +7,32 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
 from dotenv import load_dotenv
-import imapclient
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
 
 # Load environment variables
 load_dotenv()
 
-def _resolve_ipv4(hostname: str) -> str:
-    """Resolve hostname to its IPv4 address to avoid ENETUNREACH on IPv6-less hosts."""
-    try:
-        infos = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
-        if infos:
-            return infos[0][4][0]
-    except Exception:
-        pass
-    return hostname
+
+def _get_gmail_service():
+    """Build an authenticated Gmail API service from env-stored OAuth2 refresh token."""
+    creds = Credentials(
+        token=None,
+        refresh_token=os.getenv("GMAIL_REFRESH_TOKEN"),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.getenv("GMAIL_CLIENT_ID"),
+        client_secret=os.getenv("GMAIL_CLIENT_SECRET"),
+        scopes=["https://www.googleapis.com/auth/gmail.modify"],
+    )
+    creds.refresh(Request())
+    return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
 def _ollama_llm(temperature: float = 0.0) -> OllamaLLM:
@@ -189,7 +193,7 @@ def predict_spam(email_text: str) -> int:
 def send_email(smtp_server: str, port: int, sender_email: str, password: str,
                receiver_email: str, subject: str, email_body: str,
                attachment_path: str = None) -> dict:
-    """Composes and sends an email. Returns a status dictionary."""
+    """Sends an email via Gmail API (HTTPS). smtp_server/port/password kept for API compat."""
     message = MIMEMultipart()
     message["From"] = sender_email
     message["To"] = receiver_email
@@ -207,14 +211,13 @@ def send_email(smtp_server: str, port: int, sender_email: str, password: str,
         except Exception as e:
             return {"status": "error", "message": f"Failed to attach file: {str(e)}"}
 
-    context = ssl.create_default_context()
     try:
-        with smtplib.SMTP_SSL(_resolve_ipv4(smtp_server), port, context=context) as server:
-            server.login(sender_email, password)
-            server.sendmail(sender_email, receiver_email, message.as_string())
+        service = _get_gmail_service()
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        service.users().messages().send(userId="me", body={"raw": raw}).execute()
         return {"status": "success", "message": "Email sent successfully!"}
     except Exception as e:
-        return {"status": "error", "message": f"SMTP Error: {str(e)}"}
+        return {"status": "error", "message": f"Gmail API send error: {str(e)}"}
 
 
 def generate_body(subject: str) -> dict:
@@ -244,18 +247,48 @@ def generate_body(subject: str) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-def summarize_inbox(limit: int = 10) -> dict:
-    """Fetches recent emails and summarizes them."""
-    IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
-    EMAIL_ACCOUNT = os.getenv("SENDER_EMAIL")
-    PASSWORD = os.getenv("EMAIL_PASSWORD")
+def _fetch_gmail_messages(limit: int):
+    """Returns list of (subject, body) tuples for the most recent {limit} inbox messages."""
+    service = _get_gmail_service()
+    resp = service.users().messages().list(
+        userId="me", labelIds=["INBOX"], maxResults=limit
+    ).execute()
+    msg_stubs = resp.get("messages", [])
+    results = []
+    for stub in msg_stubs:
+        msg = service.users().messages().get(
+            userId="me", id=stub["id"], format="full"
+        ).execute()
+        headers = msg.get("payload", {}).get("headers", [])
+        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
+        subject = decode_subject(subject)
+        body = _extract_gmail_body(msg.get("payload", {}))
+        results.append((subject, body))
+    return results
 
-    if not EMAIL_ACCOUNT or not PASSWORD:
-        return {"status": "error", "message": "Email credentials missing in environment."}
+
+def _extract_gmail_body(payload: dict) -> str:
+    """Recursively extracts plain-text body from a Gmail API message payload."""
+    mime_type = payload.get("mimeType", "")
+    if mime_type == "text/plain":
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+    parts = payload.get("parts", [])
+    for part in parts:
+        text = _extract_gmail_body(part)
+        if text:
+            return text
+    return ""
+
+
+def summarize_inbox(limit: int = 10) -> dict:
+    """Fetches recent emails via Gmail API and summarizes them with Ollama."""
+    if not os.getenv("GMAIL_REFRESH_TOKEN"):
+        return {"status": "error", "message": "GMAIL_REFRESH_TOKEN not set in environment."}
 
     summaries = []
     try:
-        # Create ONE LLM instance (not per-email)
         llm = _ollama_llm()
         splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
         prompt = PromptTemplate(
@@ -263,35 +296,17 @@ def summarize_inbox(limit: int = 10) -> dict:
             template="Summarize the following email in a concise manner and in less than 5 lines:\n{email_content}"
         )
 
-        with imapclient.IMAPClient(_resolve_ipv4(IMAP_SERVER)) as client:
-            client.login(EMAIL_ACCOUNT, PASSWORD)
-            client.select_folder("INBOX")
-            messages = client.search("ALL")
-            target_ids = messages[-limit:]
+        messages = _fetch_gmail_messages(limit)
+        if not messages:
+            return {"status": "success", "data": []}
 
-            # Batch-fetch all emails in one IMAP call
-            if not target_ids:
-                return {"status": "success", "data": []}
-            raw_messages = client.fetch(target_ids, ["RFC822"])
-
-            for msg_id in target_ids:
-                raw_message = raw_messages[msg_id][b"RFC822"]
-                email_msg = email.message_from_bytes(raw_message)
-
-                subject = decode_subject(email_msg["Subject"])
-                body = extract_email_body(email_msg)
-
-                chunks = splitter.split_text(body)
-                if chunks:
-                    formatted_prompt = prompt.format(email_content=chunks[0])
-                    summary_text = llm.invoke(formatted_prompt)
-                else:
-                    summary_text = "No readable content to summarize."
-
-                summaries.append({
-                    "subject": subject,
-                    "summary": summary_text.strip()
-                })
+        for subject, body in messages:
+            chunks = splitter.split_text(body)
+            if chunks:
+                summary_text = llm.invoke(prompt.format(email_content=chunks[0]))
+            else:
+                summary_text = "No readable content to summarize."
+            summaries.append({"subject": subject, "summary": summary_text.strip()})
 
         return {"status": "success", "data": summaries}
     except Exception as e:
@@ -300,47 +315,23 @@ def summarize_inbox(limit: int = 10) -> dict:
 
 
 def classify_inbox(limit: int = 10) -> dict:
-    """Fetches the {limit} most recent emails and classifies them as Spam or Clean."""
-    IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
-    EMAIL_ACCOUNT = os.getenv("SENDER_EMAIL")
-    PASSWORD = os.getenv("EMAIL_PASSWORD")
-
-    if not EMAIL_ACCOUNT or not PASSWORD:
-        return {"status": "error", "message": "Email credentials missing in environment."}
+    """Fetches the {limit} most recent emails via Gmail API and classifies them as Spam or Clean."""
+    if not os.getenv("GMAIL_REFRESH_TOKEN"):
+        return {"status": "error", "message": "GMAIL_REFRESH_TOKEN not set in environment."}
 
     results = []
     try:
-        with imapclient.IMAPClient(_resolve_ipv4(IMAP_SERVER)) as client:
-            client.login(EMAIL_ACCOUNT, PASSWORD)
-            client.select_folder("INBOX")
+        messages = _fetch_gmail_messages(limit)
+        if not messages:
+            return {"status": "success", "data": []}
 
-            messages = client.search("ALL")
-            recent_messages = messages[-limit:]
+        for subject, body in messages:
+            combined = f"{subject} {body}" if body else subject
+            spam_pred = predict_spam(combined)
+            label = "Spam" if spam_pred == 1 else "Clean"
+            results.append({"subject": subject, "label": label})
 
-            if not recent_messages:
-                return {"status": "success", "data": []}
-
-            # Batch-fetch ALL emails in one IMAP call (not one-by-one)
-            raw_messages = client.fetch(recent_messages, ["RFC822"])
-
-            for msg_id in recent_messages:
-                raw_message = raw_messages[msg_id][b"RFC822"]
-                email_msg = email.message_from_bytes(raw_message)
-
-                subject = decode_subject(email_msg["Subject"])
-                body = extract_email_body(email_msg)
-
-                # Combine subject + body for better classification
-                combined = f"{subject} {body}" if body else subject
-                spam_pred = predict_spam(combined)
-                label = "Spam" if spam_pred == 1 else "Clean"
-
-                results.append({
-                    "subject": subject,
-                    "label": label
-                })
-
-        return {"status": "success", "data": list(reversed(results))}
+        return {"status": "success", "data": results}
     except Exception as e:
         print(f"[classify_inbox ERROR] {type(e).__name__}: {e}")
         return {"status": "error", "message": str(e)}
