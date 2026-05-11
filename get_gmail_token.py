@@ -2,25 +2,32 @@
 One-time script to get Gmail OAuth2 refresh token.
 Run locally: python get_gmail_token.py
 
-Steps before running:
+Steps:
 1. Go to https://console.cloud.google.com
-2. Create a project (or select existing)
-3. APIs & Services → Enable APIs → Enable "Gmail API"
-4. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID
-5. Application type: Desktop app
-6. Download the JSON → save as client_secret.json in this folder
-7. Run: python get_gmail_token.py
-8. A browser will open — log in and grant access
-9. Copy the printed GMAIL_REFRESH_TOKEN → add to HF Space secrets
+2. APIs & Services → Enable "Gmail API"
+3. Credentials → Create OAuth 2.0 Client ID (Desktop app type)
+4. Copy the Client ID and Client Secret from the credentials page
+5. Run this script: python get_gmail_token.py
+6. Enter client ID and secret when prompted
+7. A browser opens — log in and grant access
+8. Copy the 3 printed values → add to HF Space secrets
 """
 
-import json
+import glob
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 def main():
-    flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+    # Auto-detect the downloaded client secret JSON
+    matches = glob.glob("client_secret*.json")
+    if not matches:
+        print("ERROR: No client_secret*.json found in current directory.")
+        return
+    secret_file = matches[0]
+    print(f"Using: {secret_file}")
+
+    flow = InstalledAppFlow.from_client_secrets_file(secret_file, SCOPES)
     creds = flow.run_local_server(port=0)
 
     print("\n========== ADD THESE TO HF SPACE SECRETS ==========")
