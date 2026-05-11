@@ -1,6 +1,7 @@
 import smtplib
 import ssl
 import os
+import socket
 import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -18,6 +19,16 @@ from langchain_ollama import OllamaLLM
 
 # Load environment variables
 load_dotenv()
+
+def _resolve_ipv4(hostname: str) -> str:
+    """Resolve hostname to its IPv4 address to avoid ENETUNREACH on IPv6-less hosts."""
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+        if infos:
+            return infos[0][4][0]
+    except Exception:
+        pass
+    return hostname
 
 
 def _ollama_llm(temperature: float = 0.0) -> OllamaLLM:
@@ -198,7 +209,7 @@ def send_email(smtp_server: str, port: int, sender_email: str, password: str,
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        with smtplib.SMTP_SSL(_resolve_ipv4(smtp_server), port, context=context) as server:
             server.login(sender_email, password)
             server.sendmail(sender_email, receiver_email, message.as_string())
         return {"status": "success", "message": "Email sent successfully!"}
@@ -252,7 +263,7 @@ def summarize_inbox(limit: int = 10) -> dict:
             template="Summarize the following email in a concise manner and in less than 5 lines:\n{email_content}"
         )
 
-        with imapclient.IMAPClient(IMAP_SERVER) as client:
+        with imapclient.IMAPClient(_resolve_ipv4(IMAP_SERVER)) as client:
             client.login(EMAIL_ACCOUNT, PASSWORD)
             client.select_folder("INBOX")
             messages = client.search("ALL")
@@ -299,7 +310,7 @@ def classify_inbox(limit: int = 10) -> dict:
 
     results = []
     try:
-        with imapclient.IMAPClient(IMAP_SERVER) as client:
+        with imapclient.IMAPClient(_resolve_ipv4(IMAP_SERVER)) as client:
             client.login(EMAIL_ACCOUNT, PASSWORD)
             client.select_folder("INBOX")
 
