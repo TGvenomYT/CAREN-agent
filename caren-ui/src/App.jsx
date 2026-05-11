@@ -101,7 +101,7 @@ const VoiceBridge = memo(({ active, token }) => {
     : `${BACKEND}/voice/`
   return (
     <div
-      className="absolute inset-0 top-[96px] p-8 z-10"
+      className="absolute inset-0 top-[96px] bottom-[72px] md:bottom-0 p-3 md:p-8 z-10"
       style={{
         visibility: active ? 'visible' : 'hidden',
         opacity: active ? 1 : 0,
@@ -109,7 +109,7 @@ const VoiceBridge = memo(({ active, token }) => {
         transition: 'opacity 0.4s, visibility 0.4s',
       }}
     >
-      <div className="h-full w-full rounded-[2.5rem] glass-panel overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
+      <div className="h-full w-full rounded-[1.5rem] md:rounded-[2.5rem] glass-panel overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
         <iframe src={src} className="w-full h-full border-none" allow="microphone" />
       </div>
     </div>
@@ -309,11 +309,11 @@ function App() {
   // RENDER
   // ════════════════════════════════════════════════════════════════
   return (
-    <div className="flex h-screen w-full p-5 gap-5 font-sans">
+    <div className="flex h-screen w-full md:p-5 md:gap-5 font-sans">
       <Toast toasts={toasts} remove={removeToast} />
 
-      {/* ═══════════ SIDEBAR ═══════════ */}
-      <aside className="w-72 glass-panel rounded-[3rem] p-7 flex flex-col z-50 shrink-0">
+      {/* ═══════════ SIDEBAR (desktop only) ═══════════ */}
+      <aside className="hidden md:flex w-72 glass-panel rounded-[3rem] p-7 flex-col z-50 shrink-0">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-12">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-600 flex items-center justify-center logo-glow">
@@ -379,24 +379,60 @@ function App() {
       </aside>
 
       {/* ═══════════ MAIN PANEL ═══════════ */}
-      <main className="flex-1 relative glass-panel rounded-[3rem] overflow-hidden">
+      <main className="flex-1 relative glass-panel rounded-none md:rounded-[3rem] overflow-hidden">
         {/* Header bar */}
-        <header className="px-10 py-7 flex justify-between items-center border-b border-white/[0.04] relative z-40">
-          <div className="flex items-center gap-5">
-            <div className="h-9 w-[2px] rounded-full bg-gradient-to-b from-cyan-400 via-blue-500 to-transparent" />
-            <div>
-              <p className="text-[9px] uppercase tracking-[0.4em] font-bold text-slate-600">Protocol v4.2</p>
-              <h2 className="text-white font-black text-base uppercase tracking-wide leading-tight">
-                {activeTab === 'chat' ? 'Neural Hub' : activeTab === 'summaries' ? 'Intel Brief' : 'Security Scan'}
-              </h2>
+        <header className="px-4 md:px-10 py-5 md:py-7 flex justify-between items-center border-b border-white/[0.04] relative z-40">
+          <div className="flex items-center gap-3 md:gap-5">
+            {/* Mobile: logo + current tab name */}
+            <div className="flex items-center gap-2.5 md:hidden">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-600 flex items-center justify-center logo-glow shrink-0">
+                <Zap className="text-white fill-white" size={16} />
+              </div>
+              <div>
+                <h1 className="text-base font-black tracking-tighter gradient-text leading-none">CAREN</h1>
+                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                  {activeTab === 'chat' ? 'Neural Hub' : activeTab === 'summaries' ? 'Intel Brief' : 'Security Scan'}
+                </p>
+              </div>
+            </div>
+            {/* Desktop: accent bar + tab name */}
+            <div className="hidden md:flex items-center gap-5">
+              <div className="h-9 w-[2px] rounded-full bg-gradient-to-b from-cyan-400 via-blue-500 to-transparent" />
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.4em] font-bold text-slate-600">Protocol v4.2</p>
+                <h2 className="text-white font-black text-base uppercase tracking-wide leading-tight">
+                  {activeTab === 'chat' ? 'Neural Hub' : activeTab === 'summaries' ? 'Intel Brief' : 'Security Scan'}
+                </h2>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.07] px-5 py-2.5 rounded-full">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-            </span>
-            <span className="text-[9px] font-mono font-bold text-cyan-400 tracking-widest uppercase">Link Active</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 md:gap-3 bg-white/[0.03] border border-white/[0.07] px-3 md:px-5 py-2 md:py-2.5 rounded-full">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+              </span>
+              <span className="hidden sm:block text-[9px] font-mono font-bold text-cyan-400 tracking-widest uppercase">Link Active</span>
+            </div>
+            {/* Mobile-only: theme toggle + logout */}
+            <div className="flex md:hidden items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="p-2 rounded-xl border border-white/[0.08] text-slate-500 hover:text-white transition-colors"
+              >
+                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label="Sign out"
+                className="p-2 rounded-xl border border-white/[0.08] text-slate-500 hover:text-rose-400 transition-colors"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -405,7 +441,7 @@ function App() {
 
         {/* Data content pane */}
         <div
-          className="absolute inset-0 top-[88px] p-8 overflow-y-auto z-20"
+          className="absolute inset-0 top-[88px] bottom-[72px] md:bottom-0 p-4 md:p-8 overflow-y-auto z-20"
           style={{
             visibility: activeTab !== 'chat' ? 'visible' : 'hidden',
             opacity: activeTab !== 'chat' ? 1 : 0,
@@ -415,7 +451,7 @@ function App() {
           {loading ? (
             <LoadingSkeleton />
           ) : (
-            <div className="max-w-4xl mx-auto space-y-4 pb-20">
+            <div className="max-w-4xl mx-auto space-y-4 pb-4 md:pb-20">
               {/* Summaries */}
               {activeTab === 'summaries' && data.map((item, i) => (
                 <div key={i} className="glossy-button rounded-[2rem] p-7 animate-float-up" style={{ animationDelay: `${i * 60}ms` }}>
@@ -484,18 +520,28 @@ function App() {
         </div>
       </main>
 
+      {/* ═══════════ MOBILE BOTTOM NAV ═══════════ */}
+      <MobileNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onFetchData={handleFetchData}
+        onCompose={() => setIsComposing(true)}
+        loading={loading}
+      />
+
       {/* ═══════════ COMPOSE MODAL ═══════════ */}
       {isComposing && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 glass-blur bg-black/70">
-          <div className="glass-panel w-full max-w-2xl rounded-[2.5rem] shadow-[0_0_80px_rgba(34,211,238,0.1)] animate-modal overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-6 glass-blur bg-black/70">
+          <div className="glass-panel w-full md:max-w-2xl rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-[0_0_80px_rgba(34,211,238,0.1)] animate-slide-up md:animate-modal overflow-hidden">
+            <div className="max-h-[90vh] md:max-h-none overflow-y-auto">
             {/* Header */}
-            <div className="px-10 pt-10 pb-6 flex justify-between items-start border-b border-white/[0.05]">
+            <div className="px-6 md:px-10 pt-8 md:pt-10 pb-5 md:pb-6 flex justify-between items-start border-b border-white/[0.05]">
               <div>
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-7 h-7 rounded-xl bg-cyan-500/15 flex items-center justify-center">
                     <Send size={14} className="text-cyan-400" />
                   </div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Outbound Mail</h2>
+                  <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">Outbound Mail</h2>
                 </div>
                 <div className="flex items-center gap-2 pl-10">
                   <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
@@ -512,8 +558,8 @@ function App() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSendEmail} className="px-10 py-8 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSendEmail} className="px-6 md:px-10 py-6 md:py-8 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] ml-1">Recipient</label>
                   <input type="email" placeholder="target@domain.com" required className="w-full bg-white/[0.03] border border-white/[0.08] px-5 py-3.5 rounded-2xl outline-none text-white placeholder-slate-700 text-sm neon-input" value={emailForm.to} onChange={e => setEmailForm(f => ({ ...f, to: e.target.value }))} />
@@ -577,6 +623,7 @@ function App() {
                 )}
               </button>
             </form>
+            </div>{/* end scrollable wrapper */}
           </div>
         </div>
       )}
@@ -641,6 +688,70 @@ function LoadingSkeleton() {
         </div>
       ))}
     </div>
+  )
+}
+
+// ================================================================
+// MOBILE BOTTOM NAV
+// ================================================================
+function MobileNavBtn({ active, onClick, icon, label, color, loading }) {
+  const colors = {
+    cyan:    'text-cyan-400',
+    purple:  'text-purple-400',
+    emerald: 'text-emerald-400',
+  }
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 flex-1 py-2 rounded-2xl transition-colors ${active ? colors[color] : 'text-slate-600'}`}
+    >
+      {loading
+        ? <span className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+        : icon
+      }
+      <span className="text-[9px] font-black uppercase tracking-wider">{label}</span>
+    </button>
+  )
+}
+
+function MobileNav({ activeTab, onTabChange, onFetchData, onCompose, loading }) {
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+      <div className="glass-panel border-t border-white/[0.07] flex items-center px-3 pt-2 pb-safe">
+        <MobileNavBtn
+          active={activeTab === 'chat'}
+          onClick={() => onTabChange('chat')}
+          icon={<Mic size={20} />}
+          label="Hub"
+          color="cyan"
+        />
+        <MobileNavBtn
+          active={activeTab === 'summaries'}
+          onClick={() => onFetchData('summarize', 'summaries')}
+          icon={<Layers size={20} />}
+          label="Brief"
+          color="purple"
+          loading={loading && activeTab === 'summaries'}
+        />
+        <button
+          onClick={onCompose}
+          className="flex flex-col items-center gap-1 flex-1 py-2 rounded-2xl text-white"
+        >
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-600 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.35)] active:scale-95" style={{ transition: 'transform 0.15s' }}>
+            <Send size={16} />
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">New</span>
+        </button>
+        <MobileNavBtn
+          active={activeTab === 'spam'}
+          onClick={() => onFetchData('classify', 'spam')}
+          icon={<ShieldCheck size={20} />}
+          label="Scan"
+          color="emerald"
+          loading={loading && activeTab === 'spam'}
+        />
+      </div>
+    </nav>
   )
 }
 
