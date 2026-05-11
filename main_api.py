@@ -100,9 +100,14 @@ class VoiceAuthMiddleware(BaseHTTPMiddleware):
     """Gates the Gradio /voice mount (which is not a normal route, so a
     Depends() can't be attached). Verifies the same JWT via header,
     cookie, or ?t= query param."""
+    _OPEN_EXTS = (".js", ".css", ".map", ".woff", ".woff2", ".ttf", ".png", ".svg", ".ico", ".json")
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if path.startswith("/voice"):
+            # Let static assets through without auth (browsers can't attach headers for sub-resources)
+            if any(path.endswith(ext) for ext in self._OPEN_EXTS):
+                return await call_next(request)
             if not _verify_token(_extract_token(request)):
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
